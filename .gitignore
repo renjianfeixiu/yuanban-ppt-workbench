@@ -1,0 +1,10 @@
+# Local data, generated presentations and runtime caches
+.work/
+output/
+evidence/
+node_modules/
+*.pptx
+*.pptm
+.DS_Store
+.env
+.env.*

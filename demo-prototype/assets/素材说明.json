@@ -1,0 +1,27 @@
+{
+  "source": "Built-in imagegen",
+  "disclosure": "全部为 AI 生成概念示意，不代表设备规格、界面实现或实测成果。",
+  "date": "2026-10-07",
+  "images": [
+    {
+      "name": "warehouse-concept.png",
+      "prompt": "Polished realistic 3D concept illustration of a warehouse aisle, orange inspection robot and ceiling sensors. Panoramic 2:1, warm amber and burgundy, crop-safe edges. No text, logos, certificates, people, trucks or real-deployment claims."
+    },
+    {
+      "name": "sensor-flow.png",
+      "prompt": "Asset for an existing Chinese PPT template. Polished realistic 3D concept illustration, warm amber and burgundy accents, no text, no logo, no numbers, no certificates, no people, no claims of deployment. Clearly conceptual. Keep key subjects away from edges. Wide landscape approximately 2:1. A warehouse ceiling camera at left, a softly glowing amber alert symbol at center and a tablet with a simple check mark at right, connected by subtle light trails. All three subjects must sit in the TOP 60 percent of the canvas, between y=5% and y=60%. The bottom 38 percent must be empty neutral warm background because it will be cropped by the template. This picture explains perception, alerting and human review, with clear spacious composition and no written labels."
+    },
+    {
+      "name": "local-processing.png",
+      "prompt": "Asset for an existing Chinese PPT template. Polished realistic 3D concept illustration, warm amber and burgundy accents, no text, no logo, no numbers, no certificates, no people, no claims of deployment. Clearly conceptual. Keep key subjects away from edges. Panoramic approximately 2:1. Close view of a compact industrial edge-computing box in a warehouse, with two clearly separate plug-in sensor modules and a subtle shield-shaped glowing symbol to suggest local data processing. Clean hardware concept, no interface panels. Object centered, crop-safe edges."
+    },
+    {
+      "name": "review-dashboard.png",
+      "prompt": "Asset for an existing Chinese PPT template. Polished realistic 3D concept illustration, warm amber and burgundy accents, no text, no logo, no numbers, no certificates, no people, no claims of deployment. Clearly conceptual. Keep key subjects away from edges. Panoramic approximately 2:1. A rugged tablet on a warehouse workbench displays a purely illustrative warehouse aisle picture and two large clean visual symbols: amber warning triangle and green check mark. No written text, no dashboards with performance charts, no numeric readings. This represents a concept for reviewing an alert. Warm background, distinct tablet silhouette, readable at small size."
+    },
+    {
+      "name": "pilot-roadmap.png",
+      "prompt": "Asset for an existing Chinese PPT template. Polished realistic 3D concept illustration, warm amber and burgundy accents, no text, no logo, no numbers, no certificates, no people, no claims of deployment. Clearly conceptual. Keep key subjects away from edges. Panoramic approximately 2:1. Three warehouse inspection prototype stages arranged left to right in one continuous scene: compact sensor test fixture, one short aisle with a small inspection robot, then a slightly larger shelf area with several sensors. Connected by a single soft amber path on the floor. No repeated panels, no text, no numbers. Conceptual planned progression, not real deployment evidence."
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "topic": "智慧仓储：面向中小仓库的智能巡检辅助方案",
+  "slide": 2,
+  "texts": [
+    { "id": "42", "paragraphs": ["方案概览"] },
+    { "id": "15", "paragraphs": ["智慧仓储"] },
+    { "id": "16", "paragraphs": ["智能巡检概念方案"] },
+    { "id": "71", "paragraphs": ["应用场景"] },
+    { "id": "72", "paragraphs": ["核心功能"] },
+    { "id": "73", "paragraphs": ["方案特点"] },
+    { "id": "74", "paragraphs": ["验证计划"] },
+    { "id": "75", "paragraphs": ["推进安排"] },
+    { "id": "63", "paragraphs": [
+      [{ "text": "面向", "style": "normal" }, { "text": "中小仓库", "style": "emphasis" }, { "text": "，辅助日常巡检。", "style": "normal" }],
+      [{ "text": "重点关注", "style": "normal" }, { "text": "通道阻塞", "style": "emphasis" }, { "text": "与货架周边风险。", "style": "normal" }]
+    ] },
+    { "id": "64", "paragraphs": [
+      [{ "text": "使用", "style": "normal" }, { "text": "视觉与传感器", "style": "emphasis" }, { "text": "，识别现场异常。", "style": "normal" }],
+      [{ "text": "告警后由", "style": "normal" }, { "text": "人员复核", "style": "emphasis" }, { "text": "，保留处理记录。", "style": "normal" }]
+    ] },
+    { "id": "65", "paragraphs": [
+      [{ "text": "设计强调", "style": "normal" }, { "text": "低成本部署", "style": "emphasis" }, { "text": "。", "style": "normal" }],
+      [{ "text": "优先本地处理，减少不必要的数据传输。", "style": "normal" }],
+      [{ "text": "采用", "style": "normal" }, { "text": "模块化方案", "style": "emphasis" }, { "text": "，便于", "style": "normal" }, { "text": "逐步扩展", "style": "emphasis" }, { "text": "。", "style": "normal" }]
+    ] },
+    { "id": "66", "paragraphs": [
+      [{ "text": "当前为", "style": "normal" }, { "text": "概念演示", "style": "emphasis" }, { "text": "，不代表实测成果。", "style": "normal" }],
+      [{ "text": "拟验证", "style": "normal" }, { "text": "误报与响应", "style": "emphasis" }, { "text": "，记录场景和条件。", "style": "normal" }]
+    ] },
+    { "id": "67", "paragraphs": [
+      [{ "text": "先完成", "style": "normal" }, { "text": "小范围测试", "style": "emphasis" }, { "text": "，再评估应用条件。", "style": "normal" }],
+      [{ "text": "根据", "style": "normal" }, { "text": "用户反馈", "style": "emphasis" }, { "text": "完善方案，", "style": "normal" }, { "text": "按阶段推进", "style": "emphasis" }, { "text": "试点。", "style": "normal" }]
+    ] }
+  ],
+  "pictures": [
+    { "id": "1026", "file": "warehouse-concept.png", "alt": "智慧仓储概念场景，AI 生成示意" },
+    { "id": "3", "file": "sensor-flow.png", "alt": "感知、告警与复核流程示意" },
+    { "id": "4", "file": "local-processing.png", "alt": "本地处理与模块化部署示意" },
+    { "id": "7", "file": "review-dashboard.png", "alt": "巡检复核界面概念示意，非实测记录" },
+    { "id": "2", "file": "pilot-roadmap.png", "alt": "分阶段验证与试点计划示意" }
+  ]
+}

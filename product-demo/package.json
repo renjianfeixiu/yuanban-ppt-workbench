@@ -1,0 +1,12 @@
+{
+  "name": "ppt-template-product-demo",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "check": "node --check server.mjs && node --check model.mjs && node --check public/app.js",
+    "test:launcher": "node --test tests/launcher.test.mjs"
+  },
+  "description": "大纲审核、计划书草稿、模板生成与逐页官方政策材料审核的本地 Demo"
+}
