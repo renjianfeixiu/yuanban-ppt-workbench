@@ -12,19 +12,19 @@ export const outlineDefaults = [
 ];
 export const workflowHash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function initialWorkflow(draft) {
-  return { version: 2, project: { topic: draft.topic, name: draft.projectName, audience: '中小仓库管理者与巡检人员', problem: '通道阻塞、货架周边风险与告警后的人工复核', solution: '视觉与传感器辅助巡检，异常告警后由人员复核并保留记录', facts: '当前为概念方案，未提供实测结果、试点记录或经营数据。', policyScope: '全国官方政策', chapters: outlineDefaults.map(([title, points], i) => ({ id: String(i + 1), title, points })) }, approval: null, plan: null, templateConfirmed: false, pageEdits: {}, pageReviews: {}, policySelections: {}, policyRecords: {}, lastDraft: draft };
+  return { version: 3, templateKey: null, pageImages: {}, project: { topic: draft.topic, name: draft.projectName, audience: '中小仓库管理者与巡检人员', problem: '通道阻塞、货架周边风险与告警后的人工复核', solution: '视觉与传感器辅助巡检，异常告警后由人员复核并保留记录', facts: '当前为概念方案，未提供实测结果、试点记录或经营数据。', policyScope: '全国官方政策', chapters: outlineDefaults.map(([title, points], i) => ({ id: String(i + 1), title, points })) }, approval: null, plan: null, templateConfirmed: false, pageEdits: {}, pageReviews: {}, policySelections: {}, policyRecords: {}, lastDraft: draft };
 }
 export function normalizeProject(input) {
   const project = {};
   for (const key of ['topic', 'name', 'audience', 'problem', 'solution', 'facts']) project[key] = String(input?.[key] ?? '').trim().slice(0, 12000);
   project.policyScope = '全国官方政策';
-  project.chapters = (Array.isArray(input?.chapters) ? input.chapters : []).slice(0, 30).map((c, i) => ({ id: String(i + 1), title: String(c.title || '').trim().slice(0, 100), points: String(c.points || '').trim().slice(0, 8000) }));
+  project.chapters = (Array.isArray(input?.chapters) ? input.chapters : []).slice(0, 30).map((c, i) => ({ id: String(i + 1), title: String(c?.title || '').trim().slice(0, 100), points: String(c?.points || '').trim().slice(0, 8000) }));
   return project;
 }
 export function outlineIssues(project) {
   const issues = [];
   if (!project.topic) issues.push('项目题目为空。');
-  if (!project.name || [...project.name].length > 4) issues.push('项目简称需为 1–4 个字，适配当前 PPT 模板。');
+  if (!project.name || [...project.name].length > 60) issues.push('项目简称需为 1–60 个字符。');
   if (/[\\/:*?"<>|\x00-\x1f]/.test(project.name)) issues.push('项目简称不能包含路径符号或控制字符。');
   if (!project.audience || !project.problem || !project.solution) issues.push('请补充服务对象、问题和解决方案。');
   if (project.chapters.length < 3) issues.push('大纲至少需要三个章节。');
@@ -34,7 +34,7 @@ export function outlineIssues(project) {
 export function invalidateOutline(workflow, project) {
   if (workflowHash(workflow.project) !== workflowHash(project)) {
     workflow.approval = null; workflow.plan = null; workflow.templateConfirmed = false;
-    workflow.pageEdits = {}; workflow.pageReviews = {}; workflow.policySelections = {};
+    workflow.pageEdits = {}; workflow.pageImages = {}; workflow.pageReviews = {}; workflow.policySelections = {};
   }
   workflow.project = project;
   return workflow;

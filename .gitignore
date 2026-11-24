@@ -8,3 +8,6 @@ node_modules/
 .DS_Store
 .env
 .env.*
+
+# Distributable example template
+!/examples/样例模板.pptx

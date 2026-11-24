@@ -6,11 +6,14 @@ export function parseXml(xml, sax) {
   const parser = sax.parser(true, { xmlns: true, position: true, trim: false });
   const stack = [];
   let root;
+  let nodeCount = 0;
   parser.ondoctype = () => { throw new Error('DTD is not supported'); };
   parser.onopentag = tag => {
+    if (stack.length >= 128 || ++nodeCount > 200000) throw new Error('XML 结构超出支持范围。');
     const node = {
       name: tag.name, local: tag.local, uri: tag.uri,
       attrs: Object.fromEntries(Object.entries(tag.attributes).map(([k, v]) => [k, v.value])),
+      attributes: Object.values(tag.attributes),
       start: parser.startTagPosition - 1, openEnd: parser.position,
       children: [], text: '', selfClosing: tag.isSelfClosing,
     };
@@ -26,6 +29,7 @@ export function parseXml(xml, sax) {
     node.closeStart = node.selfClosing ? node.openEnd - 2 : xml.lastIndexOf('</', node.end - 1);
   };
   parser.write(xml).close();
+  if (!root) throw new Error('XML 缺少根节点。');
   return root;
 }
 
@@ -135,7 +139,11 @@ export function lockedSignature(root, textIds, pictureIds) {
     }
     const attrs = { ...n.attrs };
     if (ctx?.kind === 'pic' && pictureIds.has(ctx.id)) {
-      if (n.uri === A && n.local === 'blip') delete attrs['r:embed'];
+      if (n.uri === A && n.local === 'blip') {
+        for (const attribute of n.attributes) {
+          if (attribute.local === 'embed' && attribute.uri === 'http://schemas.openxmlformats.org/officeDocument/2006/relationships') delete attrs[attribute.name];
+        }
+      }
       if (n.uri === P && n.local === 'cNvPr') delete attrs.descr;
     }
     return {

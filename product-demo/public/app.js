@@ -13,11 +13,12 @@ const icons = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.check}</svg>`;
 const button = (label, action, style = 'secondary', iconName, disabled = false, extra = '') => `<button class="btn ${style}" data-action="${action}" ${disabled ? 'disabled' : ''} ${extra}>${iconName ? icon(iconName) : ''}${label}</button>`;
-const state = { step: 1, draft: null, template: null, assets: new Map(), selected: 0, sourceSlide: 2, view: 'generated', checking: false, checks: null, job: null, dirty: false, starting: false, modal: null, modalError: '', longBackup: null, reviewNote: '', uploading: false, workflow: null, outlineDirty: false, planText: '', planDirty: false, generationView: 'edit', pages: [], reviewPage: 2, policyQuery: '仓储 物流 数字化', policyResults: null, policyLoading: false, policySequence: 0, outlineConfirmed: false, outlineNote: '' };
+const state = { step: 1, draft: null, template: null, assets: new Map(), selected: 0, sourceSlide: 1, view: 'generated', checking: false, checks: null, job: null, dirty: false, starting: false, modal: null, modalError: '', longBackup: null, reviewNote: '', uploading: false, workflow: null, outlineDirty: false, planText: '', planDirty: false, generationView: 'edit', pages: [], reviewPage: 1, policyQuery: '仓储 物流 数字化', policyResults: null, policyLoading: false, policySequence: 0, outlineConfirmed: false, outlineNote: '' };
 let checkSequence = 0, checkTimer, pollTimer, toastTimer;
 let renderedScreen = '';
 const busy = () => state.starting || state.job?.status === 'running' || state.uploading;
 const stale = () => !!state.job && (state.dirty || state.checks?.fingerprint !== state.job.fingerprint);
+const legacy = () => state.template?.adapter === 'warehouse';
 const section = () => state.draft.sections[state.selected];
 const capacity = id => state.checks?.capacities?.find(x => x.id === id);
 const errors = () => state.checks?.issues?.filter(x => x.type === 'error') || [];
@@ -38,24 +39,98 @@ function render() {
   const focus = !screenChanged && active?.dataset?.focus ? { key: active.dataset.focus, start: active.selectionStart, end: active.selectionEnd } : null;
   app.innerHTML = `
     <header class="topbar"><div class="brand"><div class="brand-mark" aria-hidden="true"></div><div><strong>原版</strong><span>计划书与 PPT 工作台</span></div></div><div class="top-meta"><span class="local-dot">本地运行</span><span class="divider"></span><span>六步工作流 Demo</span></div></header>
-    <div class="app-shell"><aside class="sidebar"><div class="side-label">项目制作流程</div><nav class="steps" aria-label="制作流程">${['设定大纲', '人工审核', '计划书草稿', '上传模板', '自动生成', '逐页审核'].map((name, i) => `<button class="step ${state.step === i + 1 ? 'active' : ''} ${state.step > i + 1 ? 'complete' : ''}" data-action="step" data-step="${i + 1}" aria-current="${state.step === i + 1 ? 'step' : 'false'}"><span class="step-number">${state.step > i + 1 ? icon('check') : String(i + 1).padStart(2, '0')}</span><span>${name}<small>${['明确题目与章节', '确认事实和内容安排', '整理成可编辑文稿', '在草稿后选择设计', '适配现有文字位置', '修改、政策资料与复核'][i]}</small></span></button>`).join('')}</nav><div class="side-foot"><strong><span class="mini-lock">${icon('lock')}</span>大纲先确认，设计后选择</strong><p>全国官方政策优先。<br>第 2 页自动填充。<br>22 页可逐页检查修订。</p></div></aside><main class="main">${[null, outlineScreen, outlineReviewScreen, planScreen, templateScreen, state.generationView === 'edit' ? editorScreen : generateScreen, reviewScreen][state.step]()}</main></div>
+    <div class="app-shell"><aside class="sidebar"><div class="side-label">项目制作流程</div><nav class="steps" aria-label="制作流程">${['设定大纲', '人工审核', '计划书草稿', '上传模板', '自动生成', '逐页审核'].map((name, i) => `<button class="step ${state.step === i + 1 ? 'active' : ''} ${state.step > i + 1 ? 'complete' : ''}" data-action="step" data-step="${i + 1}" aria-current="${state.step === i + 1 ? 'step' : 'false'}"><span class="step-number">${state.step > i + 1 ? icon('check') : String(i + 1).padStart(2, '0')}</span><span>${name}<small>${['明确题目与章节', '确认事实和内容安排', '整理成可编辑文稿', '在草稿后选择设计', '适配现有文字位置', '修改、政策资料与复核'][i]}</small></span></button>`).join('')}</nav><div class="side-foot"><strong><span class="mini-lock">${icon('lock')}</span>大纲先确认，设计后选择</strong><p>全国官方政策优先。<br>按字段填入内容。<br>在 WPS 核对导出效果。</p></div></aside><main class="main">${[null, outlineScreen, outlineReviewScreen, planScreen, templateScreen, state.generationView === 'edit' ? editorScreen : generateScreen, reviewScreen][state.step]()}</main></div>
     ${modalScreen()}`;
   if (focus) { const target = document.querySelector(`[data-focus="${focus.key}"]`); if (target) { target.focus({ preventScroll: true }); if (typeof focus.start === 'number') try { target.setSelectionRange(focus.start, focus.end); } catch { /* Some controls have no selection. */ } } }
   if(screenChanged)window.scrollTo({top:0,left:0,behavior:'instant'});
   renderedScreen=screenKey;
 }
 
+function visiblePage(number = state.reviewPage) {
+  return state.pages.find(page => page.number === number) || state.pages[0];
+}
+function pageStrip(active, action) {
+  return `<nav class="page-review-strip panel" aria-label="选择幻灯片">${state.pages.map(page =>
+    `<button class="page-chip ${active === page.number ? 'active' : ''}" data-action="${action}" data-page="${page.number}" aria-current="${active === page.number ? 'page' : 'false'}">
+      <strong>${String(page.number).padStart(2, '0')}</strong><span>${page.slots.length} 个文字框</span>
+    </button>`).join('')}</nav>`;
+}
+function slideSketch(page, texts = {}, images = {}) {
+  const { width, height } = state.template.size;
+  const items = page.blocks.map(block => {
+    const [x, y, w, h] = block.box;
+    const common = `left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
+    if (block.kind === 'picture') {
+      const source = images[block.id] || block.media;
+      return source
+        ? `<img class="sketch-picture" style="${common}" src="${escape(source)}" alt="${escape(block.name)}">`
+        : `<div class="sketch-text" style="${common}">图片</div>`;
+    }
+    const copy = (texts[block.id] || block.paragraphs).join('\n');
+    return copy ? `<div class="sketch-text" style="${common};color:${block.color || '#2c3330'};font-size:${block.font}cqw">${escape(copy)}</div>` : '';
+  }).join('');
+  const missing = page.slots.filter(slot => !page.blocks.some(block => block.kind === 'text' && block.id === slot.id));
+  return `<div class="slide-sketch" style="aspect-ratio:${width}/${height};background:${page.color}">
+    ${items || '<span class="sketch-empty">本页没有可定位的文字或图片</span>'}</div>
+    ${missing.length ? `<p class="note" style="margin:10px 0">另有 ${missing.length} 个文字框可编辑，位置由模板版式控制。</p>` : ''}
+    <div class="caption"><span>位置预览 · 实际样式以 WPS 为准</span></div>`;
+}
 function templateScreen() {
-  return `<div class="page-head"><div><div class="eyebrow">04 / PPT TEMPLATE</div><h1>草稿准备好，再选择设计</h1><p>请上传 PPTX 模板，或复用已经提供并标注好的模板。</p></div>${button('选择 PPTX 文件', 'template-upload', 'secondary', 'upload', busy())}</div>
-  <div class="template-grid"><section class="panel"><div class="panel-head"><h2>平安货运 · 原模板</h2><span>第 ${state.sourceSlide} / 22 页</span></div><div class="stage-body"><img class="slide-image" src="/source/slide-${state.sourceSlide}.png" alt="原模板第 ${state.sourceSlide} 页" /><div class="caption"><span>原模板预览</span><span class="tag ${state.sourceSlide === 2 ? '' : 'neutral'}">${state.sourceSlide === 2 ? '本次可编辑页' : '保持原内容'}</span></div></div><div class="thumb-strip" aria-label="模板页面">${Array.from({ length: 22 }, (_, i) => `<button class="thumb ${state.sourceSlide === i + 1 ? 'active' : ''}" data-action="source-page" data-page="${i + 1}"><img loading="lazy" src="/source/slide-${i + 1}.png" alt="第 ${i + 1} 页缩略图" /><span>${String(i + 1).padStart(2, '0')}${i === 1 ? ' · 可编辑' : ''}</span></button>`).join('')}</div></section>
-  <aside class="panel details"><div class="eyebrow">TEMPLATE READY</div><h2>设计已经定好<br>内容仍然可编辑</h2><p>已读取这份模板，并标注第二页。</p><ul class="rule-list"><li>${icon('check')}<div>背景、母版与版式<small>固定属性保持原样</small></div></li><li>${icon('check')}<div>文字位置与字体格式<small>13 个文字位置可替换</small></div></li><li>${icon('check')}<div>图片框与原有裁切<small>5 张配图可更换</small></div><li>${icon('check')}<div>其他 21 页<small>本次保留原内容</small></div></li></ul><hr /><div class="file-row"><div class="file-icon">P</div><div class="file-info"><strong title="${escape(state.template.name)}">${escape(state.template.name)}</strong><span>22 页 · 16:9 · ${state.template.sizeMb} MiB</span></div></div><p class="note" style="margin-top:18px">最小 Demo 支持这份已标注模板。上传相同文件可核对；其他模板暂需先做位置标注。</p></aside></div>
-  <div class="footer-actions"><p>${state.workflow.templateConfirmed ? '模板已确认，继续查看计划书的摘要分配。' : '计划书草稿已准备，请选择文件或使用已经提供的模板。'}</p>${button('使用模板，自动分配内容', 'choose-template', 'primary', 'arrow', busy() || !state.workflow.planReady)}</div>`;
+  const page = visiblePage(state.sourceSlide);
+  const count = state.pages.reduce((sum, item) => sum + item.slots.length, 0);
+  const isSample = state.template.name === '样例模板.pptx';
+  return `<div class="page-head"><div><h1>选择 PPTX 模板</h1><p>上传自己的文稿，或使用内置样例试跑。</p></div>
+    ${button('上传 PPTX', 'template-upload', 'primary', 'upload', busy())}</div>
+    ${pageStrip(page.number, 'source-page')}
+    <div class="template-grid"><section class="panel"><div class="panel-head"><h2>${escape(state.template.name)}</h2><span>第 ${page.number} / ${state.pages.length} 页</span></div>
+      <div class="stage-body">${slideSketch(page)}</div></section>
+    <aside class="panel details"><h2>${state.pages.length} 页 · ${count} 个文字框</h2>
+    <p>${legacy() ? '已识别平安货运模板，支持第二页五栏摘要自动填入。' : '带字段标记的文字框会自动填入，其余文字框可逐页修改。'}</p>
+    <p class="note">请上传 .pptx 格式。图片中的文字需在源文件中另行处理。</p>
+    <div class="actions"><a class="btn text small" href="/sample.pptx" download>下载样例模板</a></div></aside></div>
+    <div class="footer-actions"><p>导出会生成独立 PPTX 文件。</p><div class="actions">
+    ${isSample ? '' : button('切换到样例模板', 'choose-sample', 'secondary', null, busy())}
+    ${button(isSample ? '使用样例模板' : '使用当前模板', 'choose-template', 'primary', 'arrow', busy() || !state.workflow.planReady)}</div></div>`;
+}
+function textDraft(page) {
+  return { ...state.workflow.automatic[page], ...state.workflow.pageEdits[page] };
+}
+function imageDraft(page) {
+  return Object.fromEntries(Object.entries(state.workflow.pageImages[page] || {}).map(([id, key]) => [id, state.assets.get(key)?.url]));
+}
+function genericEditor() {
+  const page = visiblePage();
+  const count = state.pages.reduce((sum, item) => sum + item.slots.length, 0);
+  const filled = Object.values(state.workflow.automatic).reduce((sum, items) => sum + Object.keys(items).length, 0);
+  const issues = errors().filter(issue => issue.page === page.number);
+  return `<div class="page-head"><div><h1>编辑模板内容</h1>
+      <p>${escape(state.template.name)} · ${count} 个可编辑文字框${filled ? ` · ${filled} 处按字段填入` : ''}</p></div>
+      ${button('检查与生成', 'generate-step', 'primary', 'arrow', busy() || state.checking)}</div>
+      ${pageStrip(page.number, 'edit-page')}
+      <div class="template-grid">
+        <section class="panel"><div class="panel-head"><h2>第 ${page.number} 页</h2><span>当前内容</span></div>
+          <div class="stage-body">${slideSketch(page, textDraft(page.number), imageDraft(page.number))}</div></section>
+        <aside class="panel details"><h2>本页内容</h2>
+          ${issues.map(issue => `<p class="notice error">${escape(issue.message)}</p>`).join('')}
+          ${button('编辑文字与备注', 'page-edit', 'secondary', 'edit', busy())}
+          ${pictureControls(page)}
+          <p class="note">编辑时可把计划书中的字段填到指定段落。</p>
+        </aside>
+      </div>`;
+}
+function pictureControls(page) {
+  if (!page.pictures.length || (legacy() && page.number === 2)) return '';
+  const chosen = state.workflow.pageImages[page.number] || {};
+  return `<div class="picture-slots"><h3>配图</h3>${page.pictures.map(pic =>
+    `<div><span>${escape(pic.name)}</span><div class="actions">${button('替换 PNG', 'page-picture', 'secondary small', null, busy(), `data-pic="${pic.id}"`)}
+    ${chosen[pic.id] ? button('恢复', 'reset-page-picture', 'text small', null, busy(), `data-pic="${pic.id}"`) : ''}</div></div>`).join('')}</div>`;
 }
 
 function meter(fit) {
   return `<div class="meter ${fit && !fit.fits ? 'over' : ''}"><span style="width:${Math.min(100, fit?.percent || 0)}%"></span></div>`;
 }
 function editorScreen() {
+  if (!legacy()) return genericEditor();
   const item = section(), column = columns[state.selected], fit = capacity(item.id), asset = state.assets.get(item.assetKey);
   const bounds = [{ l: 1.87, t: 27.2, w: 17.38, h: 39 }, { l: 20.89, t: 30.38, w: 19.04, h: 31.47 }, { l: 40.61, t: 31.56, w: 18.62, h: 39 }, { l: 60.72, t: 31, w: 18.62, h: 35.24 }, { l: 81.24, t: 26.42, w: 16.9, h: 34.9 }][state.selected];
   const columnIssues = state.checks?.issues?.filter(x => x.field === item.id) || [];
@@ -65,10 +140,17 @@ function editorScreen() {
   <div class="editor-grid"><section class="panel"><div class="column-tabs" role="tablist" aria-label="五栏内容">${columns.map((c, i) => `<button class="column-tab ${i === state.selected ? 'active' : ''} ${errors().some(x => x.field === c.id) ? 'has-error' : ''}" data-action="column" data-column="${i}" role="tab" aria-selected="${i === state.selected}">${escape(state.draft.sections[i].heading || c.name)}</button>`).join('')}</div><div class="column-editor"><div class="field"><label for="heading">栏标题<small>最多 ${column.headingLimit} 个汉字宽度</small></label><input id="heading" data-focus="heading" data-section="${item.id}" data-part="heading" value="${escape(item.heading)}" ${busy() ? 'disabled' : ''} /></div>
   ${item.paragraphs.map((p, i) => `<div class="field paragraph-field"><label for="paragraph-${i}">第 ${i + 1} 段<small>${i === 1 && column.id === '65' ? '原模板普通段落' : '沿用原段落格式'}</small></label><textarea id="paragraph-${i}" data-focus="paragraph-${i}" data-section="${item.id}" data-paragraph="${i}" data-part="text" ${busy() ? 'disabled' : ''}>${escape(p.text)}</textarea><div class="field-bottom"><span>内容完整优先，超限时精简措辞</span><span id="count-${i}">${[...p.text].length} 字</span></div>${column.emphasis[i] ? `<div class="emphasis-field"><span>黄色重点</span><input aria-label="第 ${i + 1} 段黄色重点" data-focus="emphasis-${i}" data-section="${item.id}" data-paragraph="${i}" data-part="emphasis" value="${escape(p.emphasis)}" placeholder="最多 ${column.emphasis[i]} 处，用顿号分隔" ${busy() ? 'disabled' : ''} /></div>` : ''}</div>`).join('')}
   <div class="capacity"><div class="capacity-row"><span>${state.checking ? '正在检查容量…' : fit?.fits ? '当前正文预计可容纳' : fit ? '正文预计超出原框' : '等待容量估算'}</span><strong style="color:${fit?.fits === false ? 'var(--red)' : 'var(--green)'}">${fit ? `${fit.percent}%` : '—'}</strong></div>${meter(fit)}<p class="note">按原字号、边距与行距估算占用比例，实际换行在 WPS 中确认。</p></div>${columnIssues.map(issue => `<div class="notice ${issue.type === 'error' ? 'error' : ''}" style="margin-top:12px">${icon('alert')}${escape(issue.message)}</div>`).join('')}</div></section>
-  <section class="panel editor-reference"><div class="panel-head"><h2>文字位置参考</h2><span>第 2 页 · ${escape(item.heading)}</span></div><div class="stage-body"><div class="reference-frame"><img class="slide-image" src="/source/slide-2.png" alt="原模板文字位置参考" /><div class="slot-highlight" style="left:${bounds.l}%;top:${bounds.t}%;width:${bounds.w}%;height:${bounds.h}%"></div></div><div class="caption"><span>选中的原文字框已标出</span><span>生成后查看新内容</span></div></div><div class="asset-editor"><img src="${escape(asset?.url || '')}" alt="${escape(item.heading)}配图" /><div><strong>${escape(item.heading)} · 配图</strong><p>${asset?.builtin ? '内置 AI 概念示意图' : escape(asset?.name || '新配图')}</p><div class="actions" style="margin-top:10px">${button('更换 PNG', 'image-upload', 'secondary small', 'image', busy())}${!asset?.builtin ? button('恢复示例图', 'reset-image', 'text small', null, busy()) : ''}</div></div></div><div class="notice">${icon('eye')}图片会沿用原框和原裁切。生成后请检查主体是否完整；概念图不能替代实测材料。</div></section></div>
+  <section class="panel editor-reference"><div class="panel-head"><h2>文字位置参考</h2><span>第 2 页 · ${escape(item.heading)}</span></div><div class="stage-body"><div class="reference-frame">${slideSketch(visiblePage(2))}<div class="slot-highlight" style="left:${bounds.l}%;top:${bounds.t}%;width:${bounds.w}%;height:${bounds.h}%"></div></div><div class="caption"><span>选中的原文字框已标出</span><span>生成后查看新内容</span></div></div><div class="asset-editor"><img src="${escape(asset?.url || '')}" alt="${escape(item.heading)}配图" /><div><strong>${escape(item.heading)} · 配图</strong><p>${asset?.builtin ? '内置 AI 概念示意图' : escape(asset?.name || '新配图')}</p><div class="actions" style="margin-top:10px">${button('更换 PNG', 'image-upload', 'secondary small', 'image', busy())}${!asset?.builtin ? button('恢复示例图', 'reset-image', 'text small', null, busy()) : ''}</div></div></div><div class="notice">${icon('eye')}图片会沿用原框和原裁切。生成后请检查主体是否完整；概念图不能替代实测材料。</div></section></div>
   <div class="footer-actions"><p>${state.checking ? '正在核对当前内容…' : errors().length ? `还有 ${errors().length} 个问题需要处理` : '五栏内容已准备，可以进入生成检查。'}</p>${button('检查与生成', 'generate-step', 'primary', 'arrow', busy() || state.checking)}</div>`;
 }
 
+function genericCapacityList() {
+  const fits = state.checks?.capacities || [];
+  if (!fits.length) return '<p class="details note">当前没有待写入的文字。</p>';
+  return '<div class="capacity-list">' + fits.map(fit =>
+    `<div class="capacity-item"><div><span>第 ${fit.page} 页 · ${escape(fit.heading)}</span>
+    <small>${fit.percent === null ? '按原文估算' : fit.percent + '%'}</small></div>${fit.percent === null ? '' : meter(fit)}</div>`).join('') + '</div>';
+}
 function capacityList() {
   return `<div class="capacity-list">${columns.map(c => { const fit = capacity(c.id); return `<div class="capacity-item"><div><span>${escape(state.draft.sections.find(x => x.id === c.id).heading)}</span><small style="color:${fit?.fits === false ? 'var(--red)' : ''}">${fit ? `${fit.percent}% · ${fit.estimatedLines} 行` : '待检查'}</small></div>${meter(fit)}</div>`; }).join('')}<p class="note">比例表示原框高度的估算占用量，保留 10% 余量。超过预算会拦截生成。</p></div>`;
 }
@@ -77,32 +159,75 @@ function generateScreen() {
   const generating = job?.status === 'running' || state.starting;
   const issues = state.checks?.issues || [];
   return `<div class="page-head"><div><div class="eyebrow">05 / VALIDATE & GENERATE</div><h1>先检查，再生成副本</h1><p>计划书摘要、逐页修订与确认的政策引用一起写入新副本。</p></div>${button('返回内容分配', 'editor', 'secondary small', 'back', generating)}</div>
-  <div class="audit-summary"><div class="summary-cell"><strong>13</strong><span>可替换文字位置</span><small>字号、位置和样式保留</small></div><div class="summary-cell"><strong>5</strong><span>可更换配图</span><small>原图框与裁切保留</small></div><div class="summary-cell"><strong style="color:${errors().length ? 'var(--red)' : 'var(--green)'}">${state.checking ? '…' : errors().length}</strong><span>当前阻塞问题</span><small>${errors().length ? '处理后才能生成' : '当前文案通过预检查'}</small></div></div>
-  <div class="generate-grid"><section class="panel"><div class="panel-head"><h2>当前内容检查</h2><span>${state.checking ? '检查中' : '针对当前文案'}</span></div>${issues.length ? `<div class="issue-list">${issues.map((issue, i) => `<div class="issue ${issue.type}"><p>${escape(issue.message)}</p>${button('去修改', 'fix-issue', 'text small', 'edit', generating, `data-issue="${i}"`)}</div>`).join('')}</div>` : `<div class="empty-state">${icon('check')}<div><strong>可以生成这一页</strong><p>容量估算与文字格式匹配检查已通过。</p></div></div>`}<div class="checks-list"><div class="check-row"><span class="symbol">${icon('lock')}</span><div><strong>固定模板保护</strong><p>生成时逐项核对位置、字体、图片框、母版和其他 21 页。</p></div></div><div class="check-row warning"><span class="symbol">${icon('alert')}</span><div><strong>已有模板问题单独保留</strong><p>字体缺失及全套图表校验限制会显示在结果中，不计为“全部通过”。</p></div></div></div></section>
-  <aside><section class="panel"><div class="panel-head"><h2>五栏容量</h2><span>估算值</span></div>${capacityList()}</section><section class="panel" style="margin-top:20px">${generating ? `<div class="progress-block"><div class="progress-title"><strong><span class="busy-indicator"></span> 正在生成</strong><span>${job?.progress || 3}%</span></div><div class="progress-meter"><span style="width:${job?.progress || 3}%"></span></div><p class="note" style="margin-top:13px">${escape(job?.message || '正在建立任务')}</p><ul class="stage-list">${(job?.stages || []).slice(-5).map(s => `<li>${icon('check')}${escape(s.text)}</li>`).join('')}</ul></div>` : `<div class="generation-start"><h3>${job?.status === 'failed' ? '这一轮生成未完成' : '生成可编辑的 PPT'}</h3><p>${job?.status === 'failed' ? '已保留当前文案，请查看原因后重试。' : '约需几十秒。保留完整 22 页，仅替换第二页文字和图片。'}</p>${job?.status === 'failed' ? `<details class="note"><summary>查看错误原因</summary><pre style="white-space:pre-wrap;font-size:10px">${escape(job.error)}</pre></details>` : ''}${button('生成 PPT 副本', 'generate', 'primary', 'arrow', state.checking || !state.checks?.canGenerate || busy())}${job?.status === 'ready' && !stale() ? button('查看生成结果', 'review-step', 'text', 'eye') : ''}</div>`}</section></aside></div>`;
+  <div class="audit-summary"><div class="summary-cell"><strong>${state.pages.reduce((sum, page) => sum + page.slots.length, 0)}</strong><span>可替换文字位置</span><small>字号、位置和样式保留</small></div><div class="summary-cell"><strong>${state.pages.reduce((sum, page) => sum + page.pictures.length, 0)}</strong><span>可更换配图</span><small>原图框与裁切保留</small></div><div class="summary-cell"><strong style="color:${errors().length ? 'var(--red)' : 'var(--green)'}">${state.checking ? '…' : errors().length}</strong><span>当前阻塞问题</span><small>${errors().length ? '处理后才能生成' : '当前文案通过预检查'}</small></div></div>
+  <div class="generate-grid"><section class="panel"><div class="panel-head"><h2>当前内容检查</h2><span>${state.checking ? '检查中' : '针对当前文案'}</span></div>${issues.length ? `<div class="issue-list">${issues.map((issue, i) => `<div class="issue ${issue.type}"><p>${escape(issue.message)}</p>${button('去修改', 'fix-issue', 'text small', 'edit', generating, `data-issue="${i}"`)}</div>`).join('')}</div>` : `<div class="empty-state">${icon('check')}<div><strong>可以生成 PPT</strong><p>容量估算与文字格式匹配检查已通过。</p></div></div>`}<div class="checks-list"><div class="check-row"><span class="symbol">${icon('lock')}</span><div><strong>固定模板保护</strong><p>生成时保留未修改的部件，并回读写入的文字。</p></div></div><div class="check-row warning"><span class="symbol">${icon('alert')}</span><div><strong>已有模板问题单独保留</strong><p>容量为估算，实际换行和外观需要在 WPS 中查看。</p></div></div></div></section>
+  <aside><section class="panel"><div class="panel-head"><h2>文字容量</h2><span>估算值</span></div>${legacy() ? capacityList() : genericCapacityList()}</section><section class="panel" style="margin-top:20px">${generating ? `<div class="progress-block"><div class="progress-title"><strong><span class="busy-indicator"></span> 正在生成</strong><span>${job?.progress || 3}%</span></div><div class="progress-meter"><span style="width:${job?.progress || 3}%"></span></div><p class="note" style="margin-top:13px">${escape(job?.message || '正在建立任务')}</p><ul class="stage-list">${(job?.stages || []).slice(-5).map(s => `<li>${icon('check')}${escape(s.text)}</li>`).join('')}</ul></div>` : `<div class="generation-start"><h3>${job?.status === 'failed' ? '这一轮生成未完成' : '生成可编辑的 PPT'}</h3><p>${job?.status === 'failed' ? '已保留当前文案，请查看原因后重试。' : '导出保留全部页面，写入已填写的内容和备注。'}</p>${job?.status === 'failed' ? `<details class="note"><summary>查看错误原因</summary><pre style="white-space:pre-wrap;font-size:10px">${escape(job.error)}</pre></details>` : ''}${button('生成 PPT 副本', 'generate', 'primary', 'arrow', state.checking || !state.checks?.canGenerate || busy())}${job?.status === 'ready' && !stale() ? button('查看生成结果', 'review-step', 'text', 'eye') : ''}</div>`}</section></aside></div>`;
 }
 
 function reviewScreen() {
   const job = state.job, result = job?.result;
-  if (!result || job.status !== 'ready') return `<div class="page-head"><div><div class="eyebrow">04 / Review & Export</div><h1>查看结果，核对实际显示</h1><p>生成后会在这里展示新页面和检查记录。</p></div></div><section class="panel"><div class="generation-start"><h3>${job?.status === 'running' ? 'PPT 正在生成' : '还没有生成结果'}</h3><p>先在第三步检查当前内容，再生成一个新的 PPT 副本。</p>${button('前往检查与生成', 'generate-step', 'primary', 'arrow')}</div></section>`;
+  if (!result || job.status !== 'ready') return `<div class="page-head"><div><h1>逐页审核</h1><p>先生成一个 PPT 副本。</p></div>
+    ${button('前往检查与生成', 'generate-step', 'primary', 'arrow')}</div>`;
+  const page = visiblePage(), number = page.number;
   const isStale = stale(), allConfirmed = job.review?.confirmed && !isStale;
-  const confirmed=job.pageReviews?.[state.reviewPage]?.confirmed && !isStale;
-  const checks = result.checks.map(item => item.title === 'WPS 视觉复核' && allConfirmed ? { ...item, status: 'pass', detail: '当前版本所有修改页均记录了人工复核确认。' } : item);
-  const page = state.reviewPage;
-  const previewUrl = `${result.previewUrl}?page=${page}`;
-  return `<div class="page-head"><div><div class="eyebrow">06 / PAGE REVIEW</div><h1>${isStale ? '修订已保存，请更新 PPT' : `逐页核对 · 第 ${page} 页`}</h1><p>${escape(state.draft.projectName)} · ${result.editedSlides.includes(page) ? '本页包含已写入的修改或引用备注' : '本页仍是原模板内容，需确认是否适用于新项目'}。</p></div><div class="actions">${button('修改本页文字', 'page-edit', 'secondary', 'edit', busy())}${button(isStale ? '更新 PPT' : '内容分配', isStale ? 'generate-step' : 'editor', 'secondary', isStale ? 'refresh' : 'back')}</div></div>
-  <div class="page-review-strip panel" aria-label="逐页选择">${Array.from({length:22},(_,i)=>`<button data-action="review-page" data-page="${i+1}" class="page-chip ${page===i+1?'active':''}"><strong>${String(i+1).padStart(2,'0')}</strong><span>${i===1?'自动摘要':Object.keys(state.workflow.pageEdits[i+1]||{}).length?'有文字修订':state.workflow.policySelections[i+1]?.length?'有引用':'待核对'}</span></button>`).join('')}</div>
-  ${isStale ? `<div class="notice error" style="margin-bottom:20px">${icon('alert')}这里是上一版结果。当前文案尚未重新生成，旧的复核确认不能用于当前内容。</div>` : ''}
-  <div class="review-grid"><section class="panel"><div class="panel-head"><h2>${isStale ? `上一版 · 第 ${page} 页` : `第 ${page} 页`}</h2><div class="view-tabs" aria-label="预览方式">${[['generated', '当前页'], ['source', '原模板'], ['compare', '对照']].map(([key, text]) => `<button data-action="view" data-view="${key}" class="${state.view === key ? 'active' : ''}">${text}</button>`).join('')}</div></div><div class="stage-body">${state.view === 'compare' ? `<div class="compare-grid"><div><small>原模板</small><img class="slide-image" src="/source/slide-${page}.png" alt="原模板第${page}页" /></div><div><small>当前页</small><img class="slide-image" src="${previewUrl}" alt="当前版本第${page}页" /></div></div>` : `<img class="slide-image" src="${state.view === 'source' ? `/source/slide-${page}.png` : previewUrl}" alt="第${page}页实际预览" />`}<div class="caption"><span>网页预览与 WPS 可能有差异</span><span class="tag success">固定模板保护通过</span></div></div><div class="checks-list">${checks.map(item => `<div class="check-row ${item.status}"><span class="symbol">${icon(item.status === 'pass' ? 'check' : item.status === 'warning' ? 'alert' : 'eye')}</span><div><strong>${item.title}</strong><p>${escape(item.detail)}</p></div></div>`).join('')}</div></section>
-  <aside><section class="panel policy-card">${policyScreen()}</section><section class="panel review-card" style="margin-top:18px"><div class="eyebrow">VISUAL REVIEW</div><h2>在 WPS 中做最后核对</h2><p>检查当前版本实际修改过的页面，原模板内容仍需主题核对。</p>${button('在 WPS 中打开', 'open-wps', 'secondary', 'eye', isStale)}<p class="note">打开请求成功不代表复核完成。当前查看页 ${page}。</p><hr /><label class="review-checkbox"><input id="review-confirm" type="checkbox" ${confirmed ? 'checked' : ''} ${isStale ? 'disabled' : ''} />我已在 WPS 核对当前版本第 ${page} 页。</label><textarea id="review-note" data-focus="review-note" placeholder="本页复核备注（可选）" ${isStale ? 'disabled' : ''}>${escape(state.reviewNote)}</textarea>${button('保存本页复核备注', 'save-review', 'text small', null, isStale)}<p class="note">修改页复核进度：${result.editedSlides.filter(n=>job.pageReviews?.[n]?.confirmed).length} / ${result.editedSlides.length}</p><div class="download-row">${button('下载已复核 PPT', 'download-reviewed', 'primary', 'download', !allConfirmed)}${button('先下载候选 PPT', 'download-candidate', 'secondary', 'download', isStale)}${button('下载检查记录', 'download-report', 'text small', 'download', isStale)}</div><p class="job-badge">${escape(result.filename)}</p><hr /><p class="note">未修改页保留原材料；表格、图表和原图片需要另行适配。政策引用写入本页备注，不自动变成项目成果。</p></section></aside></div>`;
+  const confirmed = job.pageReviews?.[number]?.confirmed && !isStale;
+  const checks = result.checks.map(item => item.title === 'WPS 视觉复核' && allConfirmed
+    ? { ...item, status: 'pass', detail: '已记录本版本所有修改页的人工复核。' } : item);
+  const updated = () => slideSketch(page, result.preview[number], result.pageImages[number]);
+  const preview = state.view === 'source' ? slideSketch(page) : state.view === 'compare'
+    ? `<div class="compare-grid"><div><p>原模板</p>${slideSketch(page)}</div><div><p>生成副本</p>${updated()}</div></div>` : updated();
+  const reviewCount = result.editedSlides.filter(n => job.pageReviews?.[n]?.confirmed).length;
+  return `<div class="page-head"><div><h1>${isStale ? '内容已修改，请重新生成' : `逐页核对 · 第 ${number} 页`}</h1>
+    <p>${escape(state.workflow.project.name)} · ${result.editedSlides.includes(number) ? '本页有更新' : '本页沿用模板内容'}</p></div><div class="actions">
+    ${button('修改本页文字', 'page-edit', 'secondary', 'edit', busy())}
+    ${button(isStale ? '更新 PPT' : '内容编辑', isStale ? 'generate-step' : 'editor', 'secondary', 'back', busy())}</div></div>
+    ${pageStrip(number, 'review-page')}
+    <div class="review-grid"><section class="panel">
+      <div class="panel-head"><h2>${isStale ? '上次生成的副本' : `第 ${number} 页`}</h2>
+      <div class="view-tabs" aria-label="预览方式">${[['generated','当前页'],['source','原模板'],['compare','对照']].map(([key, label]) =>
+        `<button class="${state.view === key ? 'active' : ''}" data-action="view" data-view="${key}">${label}</button>`).join('')}</div></div>
+      <div class="stage-body">${preview}</div>
+      <div class="checks-list">${checks.map(item => `<div class="check-row ${item.status}"><span class="symbol">${icon(item.status === 'pass' ? 'check' : 'eye')}</span>
+        <div><strong>${escape(item.title)}</strong><p>${escape(item.detail)}</p></div></div>`).join('')}</div>
+    </section>
+    <aside><section class="panel review-card"><h2>文件与复核</h2><p class="note">${escape(result.filename)}</p>
+      <div class="actions">${button('下载候选 PPT', 'download-candidate', 'primary', 'download', isStale)}${button('在 WPS 中打开', 'open-wps', 'secondary', 'eye', isStale)}</div>
+      <label class="review-checkbox"><input id="review-confirm" type="checkbox" ${confirmed ? 'checked' : ''} ${isStale ? 'disabled' : ''}>我已在 WPS 核对第 ${number} 页。</label>
+      <textarea id="review-note" data-focus="review-note" placeholder="本页复核备注（可选）" ${isStale ? 'disabled' : ''}>${escape(state.reviewNote)}</textarea>
+      ${button('保存本页复核备注', 'save-review', 'text small', null, isStale)}
+      <p class="note">修改页复核 ${reviewCount} / ${result.editedSlides.length}</p>
+      <div class="actions">${button('下载已复核 PPT', 'download-reviewed', 'secondary small', 'download', !allConfirmed)}
+      ${button('下载检查报告', 'download-report', 'text small', 'download', isStale)}</div>
+    </section>
+    ${page.pictures.length && !(legacy() && number === 2) ? `<section class="panel details" style="margin-top:18px">${pictureControls(page)}</section>` : ''}
+    <section class="panel policy-card" style="margin-top:18px">${policyScreen()}</section></aside></div>`;
+}
+function fieldLabel(key) {
+  const names = { topic: '项目题目', name: '项目简称', audience: '服务对象', problem: '问题', solution: '方案', facts: '事实与阶段' };
+  if (names[key]) return names[key];
+  const [, number, content] = key.split('.');
+  return `第 ${number} 章${content === 'title' ? '标题' : '内容'}`;
+}
+function pageModal() {
+  const page = visiblePage(state.modal.page);
+  const options = Object.entries(state.workflow.fields).filter(([, value]) => value).map(([key]) =>
+    `<option value="${escape(key)}">${escape(fieldLabel(key))}</option>`).join('');
+  const controls = page.slots.map(slot => `<div class="field page-slot"><strong>${escape(slot.name)}</strong>
+    ${slot.paragraphs.map((_, i) => `<div class="slot-input"><label for="slot-${slot.id}-${i}">第 ${i + 1} 段</label>
+      <select aria-label="为 ${escape(slot.name)} 第 ${i + 1} 段选择计划书内容" data-fill-slot="${slot.id}" data-paragraph="${i}"><option value="">从计划书填入</option>${options}</select>
+      <textarea id="slot-${slot.id}-${i}" data-page-slot="${slot.id}" data-paragraph="${i}" data-focus="page-${slot.id}-${i}">${escape(state.modal.values[slot.id][i])}</textarea>
+      ${slot.measured ? '' : `<p class="note">原文预算约 ${Math.floor(slot.budgets[i])} 个汉字宽度</p>`}</div>`).join('')}</div>`).join('');
+  return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head"><h2 id="modal-title">修订第 ${page.number} 页</h2><button data-action="close-page" aria-label="关闭">${icon('close')}</button></div>
+    <div class="modal-body">${controls || '<p>本页没有可编辑的文字框。你仍可添加备忘。</p>'}
+    <div class="field page-slot"><label for="page-note">本页备注</label><textarea id="page-note" data-focus="page-note">${escape(state.modal.note)}</textarea></div>
+    ${state.modalError ? `<p class="modal-error">${escape(state.modalError)}</p>` : ''}</div>
+    <div class="modal-foot"><span class="note">保存后重新生成 PPT</span>${button('保存本页修订', 'save-page', 'primary', 'check')}</div></section></div>`;
 }
 
 function modalScreen() {
   if (!state.modal) return '';
-  if (state.modal.type === 'page') {
-    const page = state.pages.find(p=>p.number===state.modal.page);
-    return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">修订第 ${page.number} 页文字</h2><button data-action="close-page" aria-label="关闭">${icon('close')}</button></div><div class="modal-body"><p class="note">保持原文字位置和段数。预算以原文长度为参考，最终需在 WPS 核对；图表、表格与原图片不会自动改写。</p>${page.slots.map(slot=>`<div class="field page-slot"><label>${escape(slot.name)}</label>${slot.paragraphs.map((p,i)=>`<textarea aria-label="位置 ${slot.id} 第 ${i+1} 段" data-page-slot="${slot.id}" data-paragraph="${i}" data-focus="page-${slot.id}-${i}">${escape(state.modal.values[slot.id][i])}</textarea><p class="note">第 ${i+1} 段 · 原文预算约 ${Math.floor(slot.budgets[i])} 个汉字宽度</p>`).join('')}</div>`).join('')}<div class="field page-slot"><label for="page-note">本页修订说明（写入备注）</label><textarea id="page-note" data-focus="page-note">${escape(state.modal.note)}</textarea></div>${state.modalError?`<p class="modal-error">${escape(state.modalError)}</p>`:''}</div><div class="modal-foot"><span class="note">保存后需更新 PPT，旧复核会失效</span>${button('保存本页修订','save-page','primary','check')}</div></section></div>`;
-  }
+  if (state.modal.type === 'page') return pageModal();
   const isOutline = state.modal.type === 'outline';
   return `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title">${isOutline ? '把大纲整理到五栏' : '项目题目与页面标题'}</h2><button data-action="close-modal" aria-label="关闭">${icon('close')}</button></div><div class="modal-body">${isOutline ? `<p class="note">按顺序填写五个 ## 标题，每段独占一行。对应段数为 2、2、3、2、2；不自动删掉内容或补造信息。</p><textarea id="outline-input" data-focus="outline" aria-label="五栏大纲">${escape(state.modal.value)}</textarea>` : `<div class="form-head" style="padding:0"><div class="field wide"><label>完整项目题目</label><input data-global="topic" data-focus="topic" value="${escape(state.draft.topic)}" /></div><div class="field"><label>项目简称<small>4 个汉字宽度</small></label><input data-global="projectName" data-focus="projectName" value="${escape(state.draft.projectName)}" /></div><div class="field"><label>页面标题<small>4 个汉字宽度</small></label><input data-global="pageTitle" data-focus="pageTitle" value="${escape(state.draft.pageTitle)}" /></div><div class="field wide"><label>副标题<small>10 个汉字宽度</small></label><input data-global="subtitle" data-focus="subtitle" value="${escape(state.draft.subtitle)}" /></div></div><p class="note" style="margin-top:18px">标题预算沿用原位置。改题目后，请同时编辑正文和配图，让内容与新题目一致。</p>`}${state.modalError ? `<p class="modal-error">${escape(state.modalError)}</p>` : ''}</div><div class="modal-foot"><span class="note">文字保持可编辑，固定版式保留</span>${button(isOutline ? '整理到原有位置' : '完成', isOutline ? 'apply-outline' : 'close-modal', 'primary', 'check')}</div></section></div>`;
 }
@@ -112,9 +237,25 @@ function applyWorkflow(workflow, resetDraft=false) {
   if (resetDraft && workflow.lastDraft) state.draft=structuredClone(workflow.lastDraft);
   if (!state.planDirty) state.planText=workflow.plan?.markdown || '';
 }
+function applyBootstrap(bootstrap) {
+  const changedTemplate = state.template?.sha256 !== bootstrap.template.sha256;
+  state.template = bootstrap.template;
+  state.pages = bootstrap.pages;
+  state.job = bootstrap.latestJob;
+  state.assets = new Map(bootstrap.assets.map(asset => [asset.key, asset]));
+  applyWorkflow(bootstrap.workflow, true);
+  if (changedTemplate) {
+    state.sourceSlide = 1;
+    state.reviewPage = legacy() ? 2 : 1;
+    state.selected = 0;
+    state.policyResults = null;
+    state.policyLoading = false;
+    state.policySequence++;
+  }
+}
 function outlineScreen() {
   const p=state.workflow.project;
-  return `<div class="page-head"><div><div class="eyebrow">01 / OUTLINE</div><h1>先把项目讲清楚</h1><p>先确定题目、事实和章节，再选择 PPT 的设计。</p></div>${button('保存大纲，人工审核','save-outline','primary','arrow',busy())}</div><section class="panel outline-project"><div class="panel-head"><h2>项目设定</h2><span>政策范围：全国官方政策</span></div><div class="workflow-form"><div class="field wide"><label for="wf-topic">项目题目</label><input id="wf-topic" data-wf="topic" data-focus="wf-topic" value="${escape(p.topic)}" /></div><div class="field"><label for="wf-name">项目简称<small>1–4 个字</small></label><input id="wf-name" data-wf="name" data-focus="wf-name" value="${escape(p.name)}" /></div><div class="field"><label for="wf-audience">服务对象</label><input id="wf-audience" data-wf="audience" data-focus="wf-audience" value="${escape(p.audience)}" /></div>${[['problem','要解决的问题'],['solution','解决方案'],['facts','已有事实、阶段与资料']].map(([key,label])=>`<div class="field wide"><label for="wf-${key}">${label}</label><textarea id="wf-${key}" data-wf="${key}" data-focus="wf-${key}">${escape(p[key])}</textarea></div>`).join('')}</div></section><section class="panel" style="margin-top:20px"><div class="panel-head"><h2>计划书章节</h2>${button('增加章节','add-chapter','text small',null)}</div><div class="chapter-list">${p.chapters.map((c,i)=>`<article class="chapter"><span class="chapter-number">${String(i+1).padStart(2,'0')}</span><div class="field"><label>章节标题</label><input aria-label="第 ${i+1} 章标题" data-chapter="${i}" data-part="title" data-focus="chapter-title-${i}" value="${escape(c.title)}" /><label style="margin-top:12px">本章要点</label><textarea aria-label="第 ${i+1} 章要点" data-chapter="${i}" data-part="points" data-focus="chapter-points-${i}">${escape(c.points)}</textarea></div>${button('移除','remove-chapter','text small',null,p.chapters.length<=3,`data-chapter-index="${i}"`)}</article>`).join('')}</div></section><div class="footer-actions"><p>修改大纲后，旧审核和草稿会失效。</p>${button('保存大纲，人工审核','save-outline','primary','arrow')}</div>`;
+  return `<div class="page-head"><div><div class="eyebrow">01 / OUTLINE</div><h1>先把项目讲清楚</h1><p>先确定题目、事实和章节，再选择 PPT 的设计。</p></div>${button('保存大纲，人工审核','save-outline','primary','arrow',busy())}</div><section class="panel outline-project"><div class="panel-head"><h2>项目设定</h2><span>政策范围：全国官方政策</span></div><div class="workflow-form"><div class="field wide"><label for="wf-topic">项目题目</label><input id="wf-topic" data-wf="topic" data-focus="wf-topic" value="${escape(p.topic)}" /></div><div class="field"><label for="wf-name">项目简称<small>最多 60 字</small></label><input id="wf-name" data-wf="name" data-focus="wf-name" value="${escape(p.name)}" /></div><div class="field"><label for="wf-audience">服务对象</label><input id="wf-audience" data-wf="audience" data-focus="wf-audience" value="${escape(p.audience)}" /></div>${[['problem','要解决的问题'],['solution','解决方案'],['facts','已有事实、阶段与资料']].map(([key,label])=>`<div class="field wide"><label for="wf-${key}">${label}</label><textarea id="wf-${key}" data-wf="${key}" data-focus="wf-${key}">${escape(p[key])}</textarea></div>`).join('')}</div></section><section class="panel" style="margin-top:20px"><div class="panel-head"><h2>计划书章节</h2>${button('增加章节','add-chapter','text small',null)}</div><div class="chapter-list">${p.chapters.map((c,i)=>`<article class="chapter"><span class="chapter-number">${String(i+1).padStart(2,'0')}</span><div class="field"><label>章节标题</label><input aria-label="第 ${i+1} 章标题" data-chapter="${i}" data-part="title" data-focus="chapter-title-${i}" value="${escape(c.title)}" /><label style="margin-top:12px">本章要点</label><textarea aria-label="第 ${i+1} 章要点" data-chapter="${i}" data-part="points" data-focus="chapter-points-${i}">${escape(c.points)}</textarea></div>${button('移除','remove-chapter','text small',null,p.chapters.length<=3,`data-chapter-index="${i}"`)}</article>`).join('')}</div></section><div class="footer-actions"><p>修改大纲后，旧审核和草稿会失效。</p>${button('保存大纲，人工审核','save-outline','primary','arrow')}</div>`;
 }
 function outlineReviewScreen() {
   const w=state.workflow,p=w.project;
@@ -160,7 +301,13 @@ async function pollJob() {
   if (!state.job || state.job.status !== 'running') return;
   try {
     state.job = await api(`/api/jobs/${state.job.id}`);
-    if (state.job.status === 'ready') { state.step = 6; state.view = 'generated'; state.reviewNote = state.job.review?.note || ''; toast('PPT 已生成，可以逐页检查与查询政策。'); queryPolicy(); }
+    if (state.job.status === 'ready') {
+      state.step = 6; state.view = 'generated';
+      state.reviewPage = state.job.result.editedSlides[0] || 1;
+      state.reviewNote = state.job.pageReviews[state.reviewPage]?.note || '';
+      toast('PPT 已生成，可以逐页核对。');
+      void queryPolicy();
+    }
     if (state.job.status === 'failed') toast('生成未完成，已保留文案和错误原因。');
     render();
   } catch (error) { toast(error.message); }
@@ -172,7 +319,15 @@ app.addEventListener('input', event => {
   if(target.dataset.wf){state.workflow.project[target.dataset.wf]=target.value;state.outlineDirty=true;state.outlineConfirmed=false;state.workflow.approved=false;return;}
   if(target.dataset.chapter!==undefined){state.workflow.project.chapters[+target.dataset.chapter][target.dataset.part]=target.value;state.outlineDirty=true;state.outlineConfirmed=false;state.workflow.approved=false;return;}
   if(target.id==='outline-note'){state.outlineNote=target.value;return;}
-  if(target.id==='plan-text'){state.planText=target.value;state.planDirty=true;return;}
+  if (target.id === 'plan-text') {
+    state.planText = target.value;
+    state.planDirty = state.planText !== state.workflow.plan?.markdown;
+    document.querySelector('[data-action="save-plan"]').disabled = !state.planDirty;
+    document.querySelector('[data-action="template-step"]').disabled = state.planDirty;
+    const preview = document.querySelector('.plan-draft-grid .plan-reading');
+    if (preview) preview.innerHTML = markdownPreview(state.planText);
+    return;
+  }
   if(target.id==='policy-query'){state.policyQuery=target.value;return;}
   if(target.dataset.pageSlot){state.modal.values[target.dataset.pageSlot][+target.dataset.paragraph]=target.value;return;}
   if(target.id==='page-note'){state.modal.note=target.value;return;}
@@ -190,6 +345,14 @@ app.addEventListener('input', event => {
 });
 
 app.addEventListener('change', async event => {
+  const fillSlot = event.target.dataset.fillSlot;
+  if (fillSlot && event.target.value) {
+    const index = Number(event.target.dataset.paragraph);
+    state.modal.values[fillSlot][index] = state.workflow.fields[event.target.value];
+    document.getElementById('slot-' + fillSlot + '-' + index).value = state.modal.values[fillSlot][index];
+    event.target.value = '';
+    return;
+  }
   if(event.target.id==='outline-confirm'){state.outlineConfirmed=event.target.checked;render();return;}
   if (event.target.id !== 'review-confirm') return;
   if (stale()) { event.target.checked = false; toast('内容已变更，请重新生成后再复核。'); return; }
@@ -220,17 +383,30 @@ app.addEventListener('click', async event => {
     if(action==='make-plan'){state.planDirty=false;applyWorkflow(await post('/api/workflow/plan',{generate:true}),true);state.step=3;state.dirty=true;render();await runCheck();}
     if(action==='save-plan'){applyWorkflow(await post('/api/workflow/plan',{markdown:state.planText}),true);state.planDirty=false;state.dirty=true;render();await runCheck();}
     if(action==='template-step'){if(state.planDirty)throw new Error('请先保存计划书草稿。');state.step=4;render();}
-    if(action==='choose-template'){applyWorkflow(await post('/api/template/choose',{}),true);state.step=5;state.generationView='edit';state.dirty=true;render();await runCheck();}
+    if (action === 'choose-template' || action === 'choose-sample') {
+      applyBootstrap(await post('/api/template/choose', { sample: action === 'choose-sample' }));
+      state.step = 5; state.generationView = 'edit'; state.dirty = true;
+      render(); await runCheck();
+    }
+    if (action === 'edit-page') { state.reviewPage = Number(node.dataset.page); render(); }
+    if (action === 'page-picture') {
+      state.pictureTarget = { page: state.reviewPage, id: node.dataset.pic, templateKey: state.template.sha256 };
+      document.querySelector('#picture-file').click();
+    }
+    if (action === 'reset-page-picture') {
+      applyWorkflow(await post('/api/page-picture', { page: state.reviewPage, id: node.dataset.pic, templateKey: state.template.sha256, key: null }));
+      state.dirty = true; await runCheck();
+    }
     if(action==='review-page'){state.reviewPage=+node.dataset.page;state.policyResults=null;state.reviewNote=state.job.pageReviews?.[state.reviewPage]?.note||'';state.view='generated';render();queryPolicy();}
     if(action==='policy-search')await queryPolicy();
-    if(action==='adopt-policy'){applyWorkflow(await post('/api/policies/adopt',{page:state.reviewPage,id:node.dataset.policyId,remove:node.dataset.remove==='true'}));state.dirty=true;await runCheck();toast(node.dataset.remove==='true'?'已移除本页引用，请更新 PPT。':'政策已加入本页引用备注，请更新 PPT。');}
+    if(action==='adopt-policy'){applyWorkflow(await post('/api/policies/adopt',{page:state.reviewPage,templateKey:state.template.sha256,id:node.dataset.policyId,remove:node.dataset.remove==='true'}));state.dirty=true;await runCheck();toast(node.dataset.remove==='true'?'已移除本页引用，请更新 PPT。':'政策已加入本页引用备注，请更新 PPT。');}
     if(action==='page-edit'){
-      if(state.reviewPage===2){state.step=5;state.generationView='edit';render();}
-      else{const page=state.pages.find(p=>p.number===state.reviewPage);state.modal={type:'page',page:page.number,values:Object.fromEntries(page.slots.map(s=>[s.id,structuredClone(state.workflow.pageEdits[page.number]?.[s.id]||s.paragraphs)])),note:state.workflow.pageReviews[page.number]?.note||''};state.modalError='';render();}
+      if(legacy() && state.reviewPage===2){state.step=5;state.generationView='edit';render();}
+      else{const page=state.pages.find(p=>p.number===state.reviewPage);state.modal={type:'page',page:page.number,values:Object.fromEntries(page.slots.map(s=>[s.id,structuredClone(textDraft(page.number)[s.id]||s.paragraphs)])),note:state.workflow.pageReviews[page.number]?.note||''};state.modalError='';render();}
     }
     if(action==='close-page'){state.modal=null;state.modalError='';render();}
     if(action==='save-page'){
-      try{applyWorkflow(await post('/api/page-edit',{page:state.modal.page,texts:Object.entries(state.modal.values).map(([id,paragraphs])=>({id,paragraphs})),note:state.modal.note}));state.modal=null;state.dirty=true;render();await runCheck();toast('本页修订已保存，更新 PPT 后核对效果。');}
+      try{applyWorkflow(await post('/api/page-edit',{page:state.modal.page,templateKey:state.template.sha256,texts:Object.entries(state.modal.values).map(([id,paragraphs])=>({id,paragraphs})),note:state.modal.note}));state.modal=null;state.dirty=true;render();await runCheck();toast('本页修订已保存，更新 PPT 后核对效果。');}
       catch(error){state.modalError=error.message;render();}
     }
     if (action === 'source-page') { state.sourceSlide = +node.dataset.page; render(); }
@@ -246,17 +422,24 @@ app.addEventListener('click', async event => {
     if (action === 'long-demo') { const p = state.draft.sections[0].paragraphs[0]; state.longBackup = structuredClone(p); p.text = '需要保留完整的巡检场景、风险说明、技术步骤和验证条件。'.repeat(100); p.emphasis = ''; state.selected = 0; markDirty(); await runCheck(); toast('已放入超长测试文字，生成会被拦截。'); }
     if (action === 'restore-long') { state.draft.sections[0].paragraphs[0] = state.longBackup; state.longBackup = null; markDirty(); await runCheck(); toast('已恢复测试前文案，其他修改保留。'); }
     if (action === 'template-upload') document.querySelector('#template-file').click();
-    if (action === 'image-upload') document.querySelector('#picture-file').click();
+    if (action === 'image-upload') { state.pictureTarget = null; document.querySelector('#picture-file').click(); }
     if (action === 'reset-image') { section().assetKey = columns[state.selected].asset; markDirty(); await runCheck(); }
     if (action === 'fix-issue') {
-      const issue = state.checks.issues[+node.dataset.issue]; const index = columns.findIndex(c => c.id === issue.field);
+      const issue = state.checks.issues[+node.dataset.issue];
+      if (!legacy() || (issue.page && issue.page !== 2)) {
+        state.step = legacy() ? 6 : 5; state.generationView = 'edit'; state.reviewPage = issue.page || 1;
+        const page = visiblePage();
+        state.modal = { type: 'page', page: page.number, values: Object.fromEntries(page.slots.map(slot => [slot.id, structuredClone(textDraft(page.number)[slot.id] || slot.paragraphs)])), note: state.workflow.pageReviews[page.number]?.note || '' };
+        state.modalError = ''; render(); return;
+      }
+      const index = columns.findIndex(c => c.id === issue.field);
       state.step = 5; state.generationView='edit';
       if (index >= 0) state.selected = index; else state.modal = { type: 'project' };
       render(); document.querySelector(index >= 0 ? `#paragraph-${issue.paragraph || 0}` : `[data-global="${issue.field}"]`)?.focus();
     }
     if (action === 'generate') {
       state.starting = true; state.step = 5; state.generationView='checks'; render();
-      try { state.job = await post('/api/jobs', normalizeDraft(state.draft)); state.dirty = false; state.starting = false; render(); pollTimer = setTimeout(pollJob, 800); }
+      try { state.job = await post('/api/jobs', legacy() ? normalizeDraft(state.draft) : {}); state.dirty = false; state.starting = false; render(); pollTimer = setTimeout(pollJob, 800); }
       catch (error) { state.starting = false; if (error.data?.job) { state.job = error.data.job; pollTimer = setTimeout(pollJob, 800); } throw error; }
     }
     if (action === 'open-wps') { const result = await post(`/api/jobs/${state.job.id}/wps`, {}); toast(result.message); }
@@ -271,22 +454,32 @@ app.addEventListener('click', async event => {
 
 document.querySelector('#template-file').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
-  state.uploading = true; render(); toast('正在核对模板文件…');
-  try { const result = await api('/api/template', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file }); state.sourceSlide = 2; if(result.workflow)applyWorkflow(result.workflow,true);toast(result.message); }
-  catch (error) { toast(error.message); }
-  finally { state.uploading = false; event.target.value = ''; render(); }
+  state.uploading = true; render(); toast('正在读取 PPTX…');
+  try {
+    const result = await api('/api/template', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }, body: file });
+    applyBootstrap(result); state.step = 5; state.generationView = 'edit'; state.dirty = true;
+    toast('模板已读取，可以编辑内容。');
+  } catch (error) { toast(error.message); }
+  finally { state.uploading = false; event.target.value = ''; render(); await runCheck(); }
 });
 document.querySelector('#picture-file').addEventListener('change', async event => {
   const file = event.target.files[0]; if (!file) return;
-  const id = section().id; state.uploading = true; render();
-  try { const image = await api('/api/images', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }, body: file }); state.assets.set(image.key, image); state.draft.sections.find(s => s.id === id).assetKey = image.key; markDirty(); toast('新配图已选好，生成后检查原裁切效果。'); }
-  catch (error) { toast(error.message); }
+  const target = state.pictureTarget;
+  const sectionId = legacy() ? section().id : null;
+  state.uploading = true; render();
+  try {
+    const image = await api('/api/images', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }, body: file });
+    state.assets.set(image.key, image);
+    if (target) applyWorkflow(await post('/api/page-picture', { ...target, key: image.key }));
+    else if (sectionId) state.draft.sections.find(s => s.id === sectionId).assetKey = image.key;
+    state.dirty = true;
+    toast('已更新配图，生成后检查裁切效果。');
+  } catch (error) { toast(error.message); }
   finally { state.uploading = false; event.target.value = ''; render(); await runCheck(); }
 });
 
 try {
-  const bootstrap = await api('/api/bootstrap'); state.draft = bootstrap.draft; state.template = bootstrap.template;state.workflow=bootstrap.workflow;state.pages=bootstrap.pages;state.planText=state.workflow.plan?.markdown||'';
-  state.assets = new Map(bootstrap.assets.map(a => [a.key, { ...a, builtin: !a.key.includes('-') || columns.some(c => c.asset === a.key) }]));
-  state.job = bootstrap.latestJob; render(); await runCheck();
+  applyBootstrap(await api('/api/bootstrap'));
+  render(); await runCheck();
   if (state.job?.status === 'running') pollTimer = setTimeout(pollJob, 800);
 } catch (error) { app.innerHTML = `<div class="loading">无法读取工作台：${escape(error.message)}</div>`; }

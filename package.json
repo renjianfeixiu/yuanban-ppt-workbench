@@ -1,0 +1,18 @@
+{
+  "name": "yuanban-ppt-workbench",
+  "version": "0.3.0",
+  "private": true,
+  "description": "本地计划书与 PPTX 模板工作台",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node product-demo/server.mjs",
+    "test": "node --test product-demo/tests/*.test.mjs"
+  },
+  "dependencies": {
+    "pngjs": "7.0.0",
+    "sax": "1.6.1",
+    "yauzl": "3.4.0",
+    "yazl": "3.3.1"
+  }
+}

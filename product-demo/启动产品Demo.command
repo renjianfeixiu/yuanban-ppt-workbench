@@ -1,9 +1,12 @@
 #!/bin/zsh
-TASK_PPT_SERVER="${0:A:h}/server.mjs"
-if [[ ! -f "$TASK_PPT_SERVER" && "${1:t}" == '启动产品Demo.command' && -f "${1:A:h}/server.mjs" ]]; then
-  TASK_PPT_SERVER="${1:A:h}/server.mjs"
+set -e
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+cd -- "${${(%):-%x}:A:h:h}"
+if ! command -v node >/dev/null; then
+  print '请先安装 Node.js 22 或更新版本：https://nodejs.org/'
+  exit 1
 fi
-if [[ ! -f "$TASK_PPT_SERVER" ]]; then
-  TASK_PPT_SERVER='/Users/wangdajin/我的文稿/agent task/codex 任务尝试/ppt-template-study/product-demo/server.mjs'
+if [[ ! -f node_modules/yauzl/package.json ]]; then
+  npm ci --omit=dev
 fi
-exec '/Users/wangdajin/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node' "$TASK_PPT_SERVER" --open-browser
+exec node product-demo/server.mjs --open-browser
