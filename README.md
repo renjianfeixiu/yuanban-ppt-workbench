@@ -4,7 +4,9 @@
 
 ## 下载与启动
 
-安装 [Node.js 22 或更高版本](https://nodejs.org/en/download/)。克隆仓库后，在仓库根目录执行：
+**直接用工作台**可以到 [GitHub Releases](https://github.com/renjianfeixiu/yuanban-ppt-workbench/releases/latest) 选择与电脑匹配的 ZIP。解压整个文件夹，Windows 双击 `START.cmd`，Mac 双击 `START.command`，Linux 运行 `./START.sh`。这些平台包自带 Node.js、依赖和三页示例模板。Mac 的 M 系列芯片选 `macos-arm64`，Intel 芯片选 `macos-x64`。常见 Intel 和 AMD 电脑选 `windows-x64` 或 `linux-x64`，ARM 电脑选对应的 `arm64` 包。
+
+**从源码运行**需要安装 [Node.js 22 或更高版本](https://nodejs.org/en/download/)。克隆仓库后，在仓库根目录执行：
 
 ```sh
 git clone https://github.com/renjianfeixiu/yuanban-ppt-workbench.git
@@ -15,7 +17,7 @@ npm start
 
 打开终端显示的地址，默认是 [127.0.0.1:5186](http://127.0.0.1:5186/)。保持终端运行，按 Ctrl+C 停止。仓库访问权限由仓库所有者管理。
 
-如果下载的是 [Releases 中附带依赖的 ZIP](https://github.com/renjianfeixiu/yuanban-ppt-workbench/releases/latest)，解压后直接执行 `npm start`。Windows 可以双击 `start-windows.cmd`，macOS 可以双击 `product-demo/启动产品Demo.command`。启动器会使用 PATH 中的 Node.js。
+已经安装 Node.js 的用户也可以下载文件名以 `-portable.zip` 结尾的通用源码包，解压后直接执行 `npm start`。
 
 ## 跑一次样例
 
